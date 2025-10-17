@@ -1,0 +1,76 @@
+name: GitHub Actions Demo
+run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+  Explore-GitHub-Actions:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
+      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
+      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
+      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
+      - name: List files in the repository
+        run: |
+          ls ${{ github.workspace }}
+      - run: echo "🍏 This job's status is ${{ job.status }}."
+
+  build:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout the source code from the latest commit
+      - name: Check out repository code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      # Step 2: Cache NPM dependencies (node_modules)
+      - name: Cache NPM dependencies
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      # Step 3: Install NPM dependencies
+      - name: Install NPM dependencies
+        run: |
+          npm install --legacy-peer-deps
+
+      # Step 4: Install the SFDX CLI (no cache)
+      - name: Install the SFDX CLI
+        run: |
+          npm install -g @salesforce/cli
+          sfdx force --help
+
+      # Step 5: Decrypt the server key
+      - name: Decrypt server key
+        run: |
+          mkdir -p assets
+          openssl enc -nosalt -aes-256-cbc -d -in assets/server.key.enc -out assets/server.key -base64 \
+          -K 472B4EC882D60FAA23623403FF4E91EA0110CBDE162787F13228102491D50702 \
+          -iv 86229888EA7D3A0C3C7B4C964A29EDE9
+
+      # Step 6: Authenticate with Salesforce using JWT
+      - name: Authenticate to Target Org
+        run: |
+          sfdx force:auth:jwt:grant --instanceurl https://test.salesforce.com \
+          --clientid 3MVG9ct5lb5FGJTNr4GcTTPN9pXfqZadXjuO71.51DTy1U7P_ucQLHUyeGt22i4xLQVJzLHWD4XPbjAMQKTxq \
+          --jwtkeyfile assets/server.key \
+          --username pideg97219-uajt@force.com.devpro \
+          --setalias TargetOrg   
+
+      # Step 7: Deploy source code against Salesforce Org
+      - name: Deploy Source Code Against Salesforce ORG
+        run: |
+          sf deploy metadata --source-dir force-app --target-org TargetOrg
